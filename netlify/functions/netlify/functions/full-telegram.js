@@ -102,6 +102,8 @@ function verifyTelegramInitData(initData) {
 }
 
 exports.handler = async (event) => {
+  console.log("FULL TELEGRAM WEBHOOK RECEIVED", event.httpMethod);
+
   if (event.httpMethod === "OPTIONS") {
     return response(200, { ok: true });
   }
