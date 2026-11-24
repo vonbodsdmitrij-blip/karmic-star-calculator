@@ -38,7 +38,8 @@ exports.handler = async (event) => {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          url: webhookUrl
+          url: webhookUrl,
+          allowed_updates: ["message"]
         })
       }
     );
