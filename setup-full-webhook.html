@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Подключение платного бота</title>
+</head>
+<body>
+  <main>
+    <h2>Подключение платного Telegram-бота</h2>
+    <p>Вставьте секрет SETUP_SECRET. Секрет не сохраняется на сайте.</p>
+
+    <form id="setup-form">
+      <label for="secret">Секрет:</label>
+      <input id="secret" type="password" autocomplete="off" required>
+      <button type="submit">Установить webhook</button>
+    </form>
+
+    <pre id="result"></pre>
+  </main>
+
+  <script>
+    document.getElementById("setup-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+
+      const secret = document.getElementById("secret").value;
+      const result = document.getElementById("result");
+
+      result.textContent = "Подключаем...";
+
+      try {
+        const response = await fetch("/.netlify/functions/set-full-webhook", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-setup-secret": secret
+          },
+          body: JSON.stringify({})
+        });
+
+        const data = await response.json();
+        result.textContent = JSON.stringify(data, null, 2);
+      } catch (error) {
+        result.textContent = "Ошибка соединения. Попробуйте позже.";
+      }
+    });
+  </script>
+</body>
+</html>
