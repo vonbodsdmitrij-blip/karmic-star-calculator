@@ -3,7 +3,9 @@ const crypto = require("crypto");
 
 const BOT_TOKEN = process.env.FULL_BOT_TOKEN;
 const CHANNEL_ID = process.env.FULL_CHANNEL_ID;
-const MINI_APP_URL = process.env.MINI_APP_URL;
+const MINI_APP_URL =
+  process.env.MINI_APP_URL ||
+  "https://exquisite-pasca-238275.netlify.app";
 
 const headers = {
   "Content-Type": "application/json",
@@ -33,7 +35,9 @@ async function telegram(method, data) {
   const json = await result.json();
 
   if (!json.ok) {
-    throw new Error(json.description || "Telegram API error");
+    throw new Error(
+      `Telegram ${method}: ${json.description || "API error"}`
+    );
   }
 
   return json.result;
@@ -110,6 +114,43 @@ async function checkMembership(userId) {
   );
 }
 
+async function sendWelcome(chatId) {
+  const welcomeText =
+    "Добро пожаловать в «Полную Кармическую Звезду»!\n\n" +
+    "Откройте калькулятор кнопкой ниже.";
+
+  try {
+    await telegram("sendMessage", {
+      chat_id: chatId,
+      text: welcomeText,
+      reply_markup: {
+        inline_keyboard: [[
+          {
+            text: "Открыть калькулятор",
+            web_app: {
+              url: MINI_APP_URL
+            }
+          }
+        ]]
+      }
+    });
+
+    console.log("Welcome message with calculator button sent");
+  } catch (error) {
+    console.error("Web App button error:", error.message);
+
+    await telegram("sendMessage", {
+      chat_id: chatId,
+      text:
+        "Добро пожаловать в «Полную Кармическую Звезду»!\n\n" +
+        "Калькулятор доступен по ссылке:\n" +
+        MINI_APP_URL
+    });
+
+    console.log("Fallback welcome message sent");
+  }
+}
+
 exports.handler = async (event) => {
   if (event.httpMethod === "OPTIONS") {
     return {
@@ -119,18 +160,45 @@ exports.handler = async (event) => {
     };
   }
 
-  if (!BOT_TOKEN) {
-    return response(500, {
-      ok: false,
-      error: "FULL_BOT_TOKEN is not configured"
+  if (event.httpMethod === "GET") {
+    return response(200, {
+      ok: true,
+      message: "Full Telegram function is running"
     });
   }
 
-  try {
-    const body = event.body ? JSON.parse(event.body) : {};
+  if (event.httpMethod !== "POST") {
+    return response(405, {
+      ok: false,
+      error: "Method Not Allowed"
+    });
+  }
 
-    // Запрос из калькулятора: проверка подписки
-    if (body.action === "check_access") {
+  if (!BOT_TOKEN) {
+    console.error("FULL_BOT_TOKEN is not configured");
+
+    return response(500, {
+      ok: false,
+      error: "Bot token is not configured"
+    });
+  }
+
+  let body;
+
+  try {
+    body = event.body ? JSON.parse(event.body) : {};
+  } catch (error) {
+    console.error("Invalid request JSON:", error.message);
+
+    return response(400, {
+      ok: false,
+      error: "Invalid JSON"
+    });
+  }
+
+  // Проверка подписки из калькулятора
+  if (body.action === "check_access") {
+    try {
       const user = verifyInitData(body.initData);
 
       if (!user || !user.id) {
@@ -151,54 +219,43 @@ exports.handler = async (event) => {
           first_name: user.first_name || ""
         }
       });
+    } catch (error) {
+      console.error("Membership check error:", error.message);
+
+      return response(500, {
+        ok: false,
+        access: false,
+        error: "Membership check failed"
+      });
     }
-
-    // Входящие сообщения от Telegram
-    if (event.httpMethod === "POST" && body.message) {
-      const message = body.message;
-      const chatId = message.chat && message.chat.id;
-      const text = message.text || "";
-
-      if (chatId && text.startsWith("/start")) {
-        if (!MINI_APP_URL) {
-          throw new Error("MINI_APP_URL is not configured");
-        }
-
-        await telegram("sendMessage", {
-          chat_id: chatId,
-          text:
-            "Добро пожаловать в «Полную Кармическую Звезду»!\n\n" +
-            "Откройте калькулятор кнопкой ниже.",
-          reply_markup: {
-            inline_keyboard: [[
-              {
-                text: "Открыть калькулятор",
-                web_app: {
-                  url: MINI_APP_URL
-                }
-              }
-            ]]
-          }
-        });
-      }
-
-      return {
-        statusCode: 200,
-        body: "OK"
-      };
-    }
-
-    return response(200, {
-      ok: true,
-      message: "Full Telegram function is running"
-    });
-
-  } catch (error) {
-    console.error("Full Telegram function error:", error);
-
-    return response(500, {
-      ok: false,
-      error: "Server error"
-    });
   }
+
+  // Входящие сообщения Telegram
+  if (body.message) {
+    const message = body.message;
+    const chatId = message.chat && message.chat.id;
+    const text = message.text || "";
+
+    console.log("Telegram message received:", text);
+
+    if (chatId && /^\/start(?:@\w+)?(?:\s|$)/.test(text)) {
+      try {
+        await sendWelcome(chatId);
+      } catch (error) {
+        console.error("Welcome delivery failed:", error.message);
+      }
+    }
+
+    // Подтверждаем Telegram получение обновления
+    return {
+      statusCode: 200,
+      headers,
+      body: "OK"
+    };
+  }
+
+  return response(200, {
+    ok: true,
+    message: "Update received"
+  });
 };
