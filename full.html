@@ -1,0 +1,239 @@
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#111827">
+  <title>Полная Кармическая Звезда</title>
+
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      padding: 24px 18px;
+      background: linear-gradient(145deg, #111827, #312044, #172554);
+      color: #fff;
+      font-family: Arial, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 440px;
+      text-align: center;
+      padding: 30px 22px;
+      border: 1px solid rgba(255,255,255,.18);
+      border-radius: 22px;
+      background: rgba(255,255,255,.08);
+      box-shadow: 0 15px 50px rgba(0,0,0,.25);
+    }
+
+    .star {
+      font-size: 58px;
+      margin-bottom: 12px;
+    }
+
+    h1 {
+      font-size: 25px;
+      line-height: 1.3;
+      margin: 0 0 14px;
+    }
+
+    p {
+      color: #e5e7eb;
+      line-height: 1.6;
+      font-size: 15px;
+    }
+
+    button, .join-button {
+      display: block;
+      width: 100%;
+      border: 0;
+      border-radius: 13px;
+      padding: 16px;
+      margin-top: 15px;
+      font-size: 16px;
+      font-weight: bold;
+      text-decoration: none;
+      cursor: pointer;
+    }
+
+    .join-button {
+      color: #20152e;
+      background: linear-gradient(90deg, #f8d477, #fff0b5);
+    }
+
+    button {
+      color: white;
+      background: #7252bd;
+    }
+
+    button:disabled {
+      opacity: .6;
+      cursor: wait;
+    }
+
+    #status {
+      min-height: 24px;
+      margin-top: 16px;
+      font-size: 14px;
+      color: #fce7b2;
+    }
+
+    #calculator {
+      display: none;
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      border: 0;
+      background: white;
+    }
+
+    .small {
+      font-size: 12px;
+      color: #cbd5e1;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+
+<body>
+
+  <main class="container" id="accessScreen">
+    <div class="star">✦</div>
+
+    <h1>Полная Кармическая Звезда</h1>
+
+    <p id="message">
+      Проверяем доступ к калькулятору...
+    </p>
+
+    <a
+      class="join-button"
+      id="joinButton"
+      href="https://t.me/+c6758VpMV8tkNGVi"
+      target="_blank"
+      rel="noopener"
+      style="display:none"
+    >
+      Подписаться на канал
+    </a>
+
+    <button id="checkButton" style="display:none">
+      Я подписался — проверить
+    </button>
+
+    <div id="status"></div>
+
+    <div class="small">
+      Доступ к калькулятору предоставляется подписчикам канала.
+    </div>
+  </main>
+
+  <iframe
+    id="calculator"
+    title="Кармическая звезда"
+  ></iframe>
+
+  <script>
+    const API_URL = "/.netlify/functions/full-telegram";
+    const CALCULATOR_URL = "/index.html";
+
+    const tg = window.Telegram?.WebApp;
+
+    const message = document.getElementById("message");
+    const status = document.getElementById("status");
+    const joinButton = document.getElementById("joinButton");
+    const checkButton = document.getElementById("checkButton");
+    const accessScreen = document.getElementById("accessScreen");
+    const calculator = document.getElementById("calculator");
+
+    if (tg) {
+      tg.ready();
+      tg.expand();
+    }
+
+    function showNoAccess() {
+      message.textContent =
+        "Для доступа к полной Кармической Звезде необходимо подписаться на наш закрытый канал.";
+
+      joinButton.style.display = "block";
+      checkButton.style.display = "block";
+      status.textContent =
+        "После подписки нажмите «Я подписался — проверить».";
+    }
+
+    async function checkAccess() {
+      if (!tg || !tg.initData) {
+        message.textContent =
+          "Откройте калькулятор через Telegram-бота, чтобы проверить подписку.";
+        status.textContent = "";
+        return;
+      }
+
+      checkButton.disabled = true;
+      checkButton.textContent = "Проверяем...";
+      status.textContent = "";
+
+      try {
+        const response = await fetch(API_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            action: "check_access",
+            initData: tg.initData
+          })
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.ok && data.access === true) {
+          message.textContent = "Доступ подтверждён!";
+          status.textContent = "Открываем калькулятор...";
+
+          accessScreen.style.display = "none";
+          calculator.style.display = "block";
+          calculator.src = CALCULATOR_URL;
+
+          return;
+        }
+
+        if (response.ok && data.ok && data.access === false) {
+          showNoAccess();
+          return;
+        }
+
+        throw new Error(
+          data.error || data.message || "Не удалось проверить подписку"
+        );
+
+      } catch (error) {
+        message.textContent = "Не удалось проверить доступ.";
+        status.textContent =
+          error.message + ". Попробуйте ещё раз.";
+
+      } finally {
+        checkButton.disabled = false;
+        checkButton.textContent = "Я подписался — проверить";
+      }
+    }
+
+    checkButton.addEventListener("click", checkAccess);
+
+    checkAccess();
+  </script>
+
+</body>
+</html>
